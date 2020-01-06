@@ -1,0 +1,9 @@
+metadata-version = "2015-12-19"
+log-level = "debug"
+onetime = true
+
+[[ template ]]
+source = "/etc/rancher-conf/metricbeat.yml.tmpl"
+dest = "/etc/rancher-conf/metricbeat.yml"
+notify-cmd = "cat /etc/rancher-conf/metricbeat.yml"
+notify-out = true
