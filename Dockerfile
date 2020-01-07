@@ -1,6 +1,9 @@
 FROM finboxio/rancher-conf-aws:v0.4.2
 
-COPY config.toml /etc/rancher-conf/
-COPY metricbeat.yml.tmpl /etc/rancher-conf/
+VOLUME /etc/rancher-conf/metricbeat
 
-COPY run.sh /opt/rancher/bin/
+ADD config.toml /etc/rancher-conf/
+ADD metricbeat.yml.tmpl /etc/rancher-conf/
+
+ADD run.sh /opt/rancher/bin/
+ADD setup.sh /etc/rancher-conf/

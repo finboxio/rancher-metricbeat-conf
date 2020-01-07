@@ -53,24 +53,38 @@ metricbeat.modules:
   period: 10s
   metricsets:
     - cpu             # CPU usage
-    - core            # Per CPU core usage
-    - load            # CPU load averages
     - memory          # Memory usage
-    - network         # Network IO
     - process         # Per process metrics
-    - process_summary # Process summary
-    - uptime          # System Uptime
+    - diskio          # Disk IO
     - socket          # Sockets and connection info (linux only)
     - socket_summary  # Socket summary
-    - diskio          # Disk IO
-    - filesystem      # File system usage for each mountpoint
-    - fsstat          # File system summary metrics
+    - load            # CPU load averages
+    - core            # Per CPU core usage
 
   processes: [ '.*' ]
+  process.include_cpu_ticks: false
+  process.cgroups.enabled: true
+  process.include_top_n:
+    enabled: true
+    by_cpu: 10
+    by_memory: 10
 
-  # Configure the metric types that are included by these metricsets.
-  cpu.metrics:  [ 'percentages', 'normalized_percentages', 'ticks' ]
-  core.metrics: [ 'percentages', 'ticks' ]
+  cpu.metrics:  [ 'percentages', 'normalized_percentages' ]
+  core.metrics: [ 'percentages' ]
+
+  socket.reverse_lookup.enabled: true
+  # socket.reverse_lookup.success_ttl: 60s
+  # socket.reverse_lookup.failure_ttl: 60s
+
+- module: system
+  enabled: true
+  period: 60s
+  metricsets:
+    - process_summary # Process summary
+    - network         # Network IO
+    - uptime          # System Uptime
+    - filesystem      # File system usage for each mountpoint
+    - fsstat          # File system summary metrics
 
   # A list of filesystem types to ignore. The filesystem metricset will not
   # collect data from filesystems matching any of the specified types, and
@@ -78,73 +92,77 @@ metricbeat.modules:
   # If not set, types associated to virtual filesystems are automatically
   # added when this information is available in the system (e.g. the list of
   # `nodev` types in `/proc/filesystem`).
-  #filesystem.ignore_types: []
-
-  # These options allow you to filter out all processes that are not
-  # in the top N by CPU or memory, in order to reduce the number of documents created.
-  # If both the `by_cpu` and `by_memory` options are used, the union of the two sets
-  # is included.
-  #process.include_top_n:
-
-    # Set to false to disable this feature and include all processes
-    #enabled: true
-
-    # How many processes to include from the top by CPU. The processes are sorted
-    # by the `system.process.cpu.total.pct` field.
-    #by_cpu: 0
-
-    # How many processes to include from the top by memory. The processes are sorted
-    # by the `system.process.memory.rss.bytes` field.
-    #by_memory: 0
+  filesystem.ignore_types:
+    - nsfs
+    - sysfs
+    - rootfs
+    - tmpfs
+    - bdev
+    - proc
+    - cpuset
+    - cgroup
+    - cgroup2
+    - devtmpfs
+    - binfmt_misc
+    - debugfs
+    - tracefs
+    - securityfs
+    - sockfs
+    - dax
+    - bpf
+    - pipefs
+    - ramfs
+    - hugetlbfs
+    - devpts
+    - ecryptfs
+    - fuse
+    - fusectl
+    - overlay
+    - pstore
+    - mqueue
+    - selinuxfs
 
   # If false, cmdline of a process is not cached.
-  #process.cmdline.cache.enabled: true
-
-  # Enable collection of cgroup metrics from processes on Linux.
-  #process.cgroups.enabled: true
+  # process.cmdline.cache.enabled: true
 
   # A list of regular expressions used to whitelist environment variables
   # reported with the process metricset's events. Defaults to empty.
-  #process.env.whitelist: []
+  # process.env.whitelist: []
 
   # Include the cumulative CPU tick values with the process metrics. Defaults
   # to false.
-  #process.include_cpu_ticks: false
 
   # Raid mount point to monitor
-  #raid.mount_point: '/'
-
-  # Configure reverse DNS lookup on remote IP addresses in the socket metricset.
-  socket.reverse_lookup.enabled: true
-  # socket.reverse_lookup.success_ttl: 60s
-  # socket.reverse_lookup.failure_ttl: 60s
+  # raid.mount_point: '/'
 
   # Diskio configurations
-  #diskio.include_devices: []
+  # diskio.include_devices: []
 
 #------------------------------- Docker Module -------------------------------
 - module: docker
-  metricsets:
-    - "container"
-    - "cpu"
-    - "diskio"
-    - "event"
-    - "healthcheck"
-    - "info"
-    - "image"
-    - "memory"
-    - "network"
-  hosts: [ "unix:///var/run/docker.sock" ]
-  period: 10s
   enabled: true
+  period: 10s
+  hosts: [ "unix:///var/run/docker.sock" ]
+  cpu.cores: true
+  labels.dedot: false
+  metricsets:
+    - cpu
+    - diskio
+    - memory
+    - event
+    - healthcheck
 
-  # If set to true, replace dots in labels with `_`.
-  #labels.dedot: false
-
-  # If set to true, collects metrics per core.
-  #cpu.cores: true
-
-  # To connect to Docker over TLS you must specify a client and CA certificate.
+- module: docker
+  enabled: true
+  period: 60s
+  hosts: [ "unix:///var/run/docker.sock" ]
+  cpu.cores: true
+  labels.dedot: false
+  metricsets:
+    - network
+    - info
+    - container
+    - image
   #ssl:
     #certificate_authority: "/etc/pki/root/ca.pem"
     #certificate:           "/etc/pki/client/cert.pem"
@@ -352,7 +370,8 @@ metricbeat.modules:
 # The name of the shipper that publishes the network data. It can be used to group
 # all the transactions sent by a single shipper in the web interface.
 # If this options is not defined, the hostname is used.
-{{- with .GetHost }}
+
+{{- with host }}
 name: {{ .Name }} # Get aws host id (i-xyz)
 
 # The tags of the shipper are included in their own field with each
@@ -367,7 +386,6 @@ fields:
 {{- range $key, $value := .Labels }}
   {{ $key }}: "{{ $value }}"
 {{- end }}
-
 {{- end }}
 
 # If this option is set to true, the custom fields are stored as top-level
@@ -477,92 +495,128 @@ fields:
 # values:
 #
 processors:
-#- include_fields:
-#    fields: ["cpu"]
-#- drop_fields:
-#    fields: ["cpu.user", "cpu.system"]
-#
-# The following example drops the events that have the HTTP response code 200:
-#
-#processors:
-#- drop_event:
-#    when:
-#       equals:
-#           http.code: 200
+  # The following example enriches each event with metadata from the cloud
+  # provider about the host machine. It works on EC2, GCE, DigitalOcean,
+  # Tencent Cloud, and Alibaba Cloud.
+  - add_cloud_metadata: ~
 
-# The following example tokenizes the string into fields:
-#
-#processors:
-#- dissect:
-#    tokenizer: "%{key1} - %{key2}"
-#    field: "message"
-#    target_prefix: "dissect"
+  # The following example enriches each event with the machine's local time zone
+  # offset from UTC.
+  - add_locale:
+     format: offset
 
-# The following example enriches each event with metadata from the cloud
-# provider about the host machine. It works on EC2, GCE, DigitalOcean,
-# Tencent Cloud, and Alibaba Cloud.
+  # The following example enriches each event with docker metadata, it matches
+  # given fields to an existing container id and adds info from that container:
+  - add_docker_metadata:
+     host: "unix:///var/run/docker.sock"
+     match_fields: ["system.process.cgroup.id"]
+     match_pids: ["process.pid", "process.ppid"]
+     match_source: true
+     match_source_index: 4
+     match_short_id: false
+     cleanup_timeout: 60
+     labels.dedot: false
+     #ssl:
+     #  certificate_authority: "/etc/pki/root/ca.pem"
+     #  certificate:           "/etc/pki/client/cert.pem"
+     #  key:                   "/etc/pki/client/cert.key"
 
-- add_cloud_metadata: ~
+  # The following example enriches each event with host metadata.
+  # - add_host_metadata:
+      # netinfo.enabled: true
 
-# The following example enriches each event with the machine's local time zone
-# offset from UTC.
+  #- include_fields:
+  #    fields: ["cpu"]
 
-- add_locale:
-   format: offset
+  - drop_fields:
+      fields:
+        - system.process.cgroup.blkio.id
+        - system.process.cgroup.blkio.path
+        - system.process.cgroup.blkio.total.bytes
+        - system.process.cgroup.blkio.total.ios
+        - system.process.cgroup.cpu.cfs.period.us
+        - system.process.cgroup.cpu.cfs.quota.us
+        - system.process.cgroup.cpu.cfs.shares
+        - system.process.cgroup.cpu.id
+        - system.process.cgroup.cpu.path
+        - system.process.cgroup.cpu.rt.period.us
+        - system.process.cgroup.cpu.rt.runtime.us
+        - system.process.cgroup.cpu.stats.periods
+        - system.process.cgroup.cpu.stats.throttled.ns
+        - system.process.cgroup.cpu.stats.throttled.periods
+        - system.process.cgroup.cpuacct.id
+        - system.process.cgroup.cpuacct.path
+        - system.process.cgroup.cpuacct.stats.system.ns
+        - system.process.cgroup.cpuacct.stats.user.ns
+        - system.process.cgroup.cpuacct.total.ns
+        - system.process.cgroup.memory.id
+        - system.process.cgroup.memory.kmem.failures
+        - system.process.cgroup.memory.kmem.limit.bytes
+        - system.process.cgroup.memory.kmem.usage.bytes
+        - system.process.cgroup.memory.kmem.usage.max.bytes
+        - system.process.cgroup.memory.kmem_tcp.failures
+        - system.process.cgroup.memory.kmem_tcp.limit.bytes
+        - system.process.cgroup.memory.kmem_tcp.usage.bytes
+        - system.process.cgroup.memory.kmem_tcp.usage.max.bytes
+        - system.process.cgroup.memory.mem.failures
+        - system.process.cgroup.memory.mem.limit.bytes
+        - system.process.cgroup.memory.mem.usage.bytes
+        - system.process.cgroup.memory.mem.usage.max.bytes
+        - system.process.cgroup.memory.memsw.failures
+        - system.process.cgroup.memory.memsw.limit.bytes
+        - system.process.cgroup.memory.memsw.usage.bytes
+        - system.process.cgroup.memory.memsw.usage.max.bytes
+        - system.process.cgroup.memory.path
+        - system.process.cgroup.memory.stats.active_anon.bytes
+        - system.process.cgroup.memory.stats.active_file.bytes
+        - system.process.cgroup.memory.stats.cache.bytes
+        - system.process.cgroup.memory.stats.hierarchical_memory_limit.bytes
+        - system.process.cgroup.memory.stats.hierarchical_memsw_limit.bytes
+        - system.process.cgroup.memory.stats.inactive_anon.bytes
+        - system.process.cgroup.memory.stats.inactive_file.bytes
+        - system.process.cgroup.memory.stats.major_page_faults
+        - system.process.cgroup.memory.stats.mapped_file.bytes
+        - system.process.cgroup.memory.stats.page_faults
+        - system.process.cgroup.memory.stats.pages_in
+        - system.process.cgroup.memory.stats.pages_out
+        - system.process.cgroup.memory.stats.rss.bytes
+        - system.process.cgroup.memory.stats.rss_huge.bytes
+        - system.process.cgroup.memory.stats.swap.bytes
+        - system.process.cgroup.memory.stats.unevictable.bytes
+        - system.process.cgroup.path
 
-# The following example enriches each event with docker metadata, it matches
-# given fields to an existing container id and adds info from that container:
-#
-- add_docker_metadata:
-   host: "unix:///var/run/docker.sock"
-   match_fields: ["system.process.cgroup.id"]
-   match_pids: ["process.pid", "process.ppid"]
-   match_source: true
-   match_source_index: 4
-   match_short_id: false
-   cleanup_timeout: 60
-   labels.dedot: false
-   # To connect to Docker over TLS you must specify a client and CA certificate.
-   #ssl:
-   #  certificate_authority: "/etc/pki/root/ca.pem"
-   #  certificate:           "/etc/pki/client/cert.pem"
-   #  key:                   "/etc/pki/client/cert.key"
+  # The following example drops the events that have the HTTP response code 200:
+  #- drop_event:
+  #    when:
+  #       equals:
+  #           http.code: 200
 
-# The following example enriches each event with docker metadata, it matches
-# container id from log path available in `source` field (by default it expects
-# it to be /var/lib/docker/containers/*/*.log).
+  # The following example tokenizes the string into fields:
+  #- dissect:
+  #    tokenizer: "%{key1} - %{key2}"
+  #    field: "message"
+  #    target_prefix: "dissect"
 
-- add_docker_metadata: ~
+  # The following example enriches each event with process metadata using
+  # process IDs included in the event.
+  # - add_process_metadata:
+  #    match_pids: ["system.process.ppid"]
+  #    target: system.process.parent
 
-# The following example enriches each event with host metadata.
+  # The following example renames the field a to b:
+  #- rename:
+  #    fields:
+  #       - from: "a"
+  #         to: "b"
 
-- add_host_metadata:
-  netinfo.enabled: false
-
-# The following example enriches each event with process metadata using
-# process IDs included in the event.
-
-- add_process_metadata:
-   match_pids: ["system.process.ppid"]
-   target: system.process.parent
-
-# The following example renames the field a to b:
-#
-#- rename:
-#    fields:
-#       - from: "a"
-#         to: "b"
-
-# The following example decodes fields containing JSON strings
-# and replaces the strings with valid JSON objects.
-#
-#processors:
-#- decode_json_fields:
-#    fields: ["field1", "field2", ...]
-#    process_array: false
-#    max_depth: 1
-#    target: ""
-#    overwrite_keys: false
+  # The following example decodes fields containing JSON strings
+  # and replaces the strings with valid JSON objects.
+  #- decode_json_fields:
+  #    fields: ["field1", "field2", ...]
+  #    process_array: false
+  #    max_depth: 1
+  #    target: ""
+  #    overwrite_keys: false
 
 #================================ Outputs ======================================
 
@@ -1136,7 +1190,7 @@ processors:
 
 # The directory from where to read the dashboards. The default is the `kibana`
 # folder in the home path.
-#setup.dashboards.directory: ${path.home}/kibana
+setup.dashboards.directory: /usr/share/metricbeat/kibana
 
 # The URL from where to download the dashboards archive. It is used instead of
 # the directory if it has a value.
