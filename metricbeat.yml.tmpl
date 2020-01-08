@@ -585,6 +585,25 @@ processors:
         - system.process.cgroup.memory.stats.unevictable.bytes
         - system.process.cgroup.path
 
+  # The following example renames the field a to b:
+  - rename:
+      ignore_missing: true
+      fail_on_error: false
+      # NOTE: Renaming these fields to achieve compatibility with
+      #       logging indexes created by Graylog2 (since graylog
+      #       does not support '.' in field names).
+      #       There is an open issue in the Graylog repo to support
+      #       '.' in field names.
+      #       Also would rather copy fields instead of renaming
+      #       but this is not available yet as a processor type
+      fields:
+        - from: host.name
+          to: host_name
+        - from: docker.container.id
+          to: docker_container_id
+        - from: docker.container.labels.io.rancher.service.deployment.unit
+          to: docker_container_labels_io_rancher_service_deployment_unit
+
   # The following example drops the events that have the HTTP response code 200:
   #- drop_event:
   #    when:
