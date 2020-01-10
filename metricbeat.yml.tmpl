@@ -203,7 +203,7 @@ metricbeat.modules:
     {{- end }}
     hosts:
     {{- range $service.Containers }}
-      - {{ .Address }}:{{ .Port }}
+      - {{ .Address }}
     {{- end }}
     {{- end }}
   {{- end }}
