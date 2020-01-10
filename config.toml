@@ -1,6 +1,7 @@
 metadata-version = "2015-12-19"
 log-level = "debug"
-onetime = true
+onetime = false
+interval = 60
 
 [[ template ]]
 source = "/etc/rancher-conf/metricbeat.yml.tmpl"

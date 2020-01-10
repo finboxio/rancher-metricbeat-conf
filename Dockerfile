@@ -1,4 +1,4 @@
-FROM finboxio/rancher-conf-aws:v0.4.2
+FROM finboxio/rancher-conf-aws:v0.5.0
 
 VOLUME /etc/rancher-conf/metricbeat
 
