@@ -50,8 +50,16 @@ fields:
 {{- end }}
 {{- end }}
 
+http.enabled: true
+
 #==========================  Modules configuration ============================
 metricbeat.modules:
+  - module: beat
+    metricsets: [ stats, state ]
+    period: 1m
+    hosts: [ localhost:5066 ]
+    xpack.enabled: true
+
   #------------------------------- System Module -------------------------------
   - module: system
     enabled: true
@@ -195,7 +203,7 @@ metricbeat.modules:
     {{- end }}
     hosts:
     {{- range $service.Containers }}
-      - {{ .Address }}
+      - {{ .Address }}:{{ .Port }}
     {{- end }}
     {{- end }}
   {{- end }}
