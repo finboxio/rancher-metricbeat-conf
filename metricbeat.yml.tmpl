@@ -190,6 +190,8 @@ metricbeat.modules:
     {{- $primary := index $service.Containers 0 }}
     {{- if or (ne $primary.State "running") (ne $primary.Host.UUID $host_id) }}
     enabled: false
+    {{- else }}
+    enabled: true
     {{- end }}
     hosts:
     {{- range $service.Containers }}
@@ -203,7 +205,7 @@ metricbeat.modules:
   {{- $list := split $key "." }}
   {{- if gt (len $list) 2 }}
   {{- if (and (eq (index $list 0) $my_stack) (eq (index $list 1) $my_service) (ne (index $list 2) "module")) }}
-    {{ replace $key (print $my_stack "." $my_service ".") "" 1 }}: "{{ $value }}"
+    {{ replace $key (print $my_stack "." $my_service ".") "" 1 }}: {{ $value }}
   {{- end }}
   {{- end }}
 {{- end }}
