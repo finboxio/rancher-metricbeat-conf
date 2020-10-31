@@ -202,8 +202,9 @@ metricbeat.modules:
     enabled: true
     {{- end }}
     hosts:
+    {{- $hostLabel := $service.Labels.GetValue (printf "%s.%s.address" $my_stack $my_service) "${ip}" }}
     {{- range $service.Containers }}
-      - {{ .Address }}
+      - {{ replace $hostLabel "${ip}" .Address }}
     {{- end }}
     {{- end }}
   {{- end }}
@@ -212,7 +213,7 @@ metricbeat.modules:
 {{- range $key, $value := .Labels }}
   {{- $list := split $key "." }}
   {{- if gt (len $list) 2 }}
-  {{- if (and (eq (index $list 0) $my_stack) (eq (index $list 1) $my_service) (ne (index $list 2) "module")) }}
+  {{- if (and (eq (index $list 0) $my_stack) (eq (index $list 1) $my_service) (ne (index $list 2) "module") (ne (index $list 2) "address")) }}
     {{ replace $key (print $my_stack "." $my_service ".") "" 1 }}: {{ $value }}
   {{- end }}
   {{- end }}
