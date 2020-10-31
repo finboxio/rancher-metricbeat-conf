@@ -204,7 +204,7 @@ metricbeat.modules:
     hosts:
     {{- $hostLabel := $service.Labels.GetValue (printf "%s.%s.address" $my_stack $my_service) "${ip}" }}
     {{- range $service.Containers }}
-      - {{ replace $hostLabel "${ip}" .Address }}
+      - {{ replace $hostLabel "${ip}" .Address 1 }}
     {{- end }}
     {{- end }}
   {{- end }}
