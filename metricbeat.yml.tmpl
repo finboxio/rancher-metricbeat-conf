@@ -181,16 +181,16 @@ metricbeat.modules:
 {{- $host_id := .UUID }}
 {{- with service }}
 {{- with .Parent }}
-{{- $my_stack := .Stack }}
+{{- $my_stack := .Stack.Name }}
 {{- $my_service := .Name }}
 {{- range $service := services }}
 {{- range $key, $value := .Labels }}
-  {{- $list := split $key "." }}
+  {{- $list := splitList "." $key }}
   {{- if gt (len $list) 2 }}
   {{- if (and (eq (index $list 0) $my_stack) (eq (index $list 1) $my_service) (eq (index $list 2) "module")) }}
 
   - module: {{ $value }}
-    service.name: {{ $service.Name }}.{{ $service.Stack }}.rancher.internal
+    service.name: {{ $service.Name }}.{{ $service.Stack.Name }}.rancher.internal
     period: 1m
     {{- if (lt (len $service.Containers) 1) }}
     enabled: false
@@ -204,17 +204,18 @@ metricbeat.modules:
     hosts:
     {{- $hostLabel := $service.Labels.GetValue (printf "%s.%s.address" $my_stack $my_service) "%{ip}" }}
     {{- range $service.Containers }}
-      - {{ replace $hostLabel "%{ip}" .Address -1 }}
+      {{- $host := .Host }}
+      - "{{ replace "%{host.ip}" $host.AgentIP (replace "%{ip}" .PrimaryIp $hostLabel) }}"
     {{- end }}
     {{- end }}
   {{- end }}
   {{- end }}
 {{- end }}
 {{- range $key, $value := .Labels }}
-  {{- $list := split $key "." }}
+  {{- $list := splitList "." $key }}
   {{- if gt (len $list) 2 }}
   {{- if (and (eq (index $list 0) $my_stack) (eq (index $list 1) $my_service) (ne (index $list 2) "module") (ne (index $list 2) "address")) }}
-    {{ replace $key (print $my_stack "." $my_service ".") "" 1 }}: {{ $value }}
+    {{ replace (print $my_stack "." $my_service ".") "" $key }}: {{ $value }}
   {{- end }}
   {{- end }}
 {{- end }}
