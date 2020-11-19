@@ -8,3 +8,7 @@ source = "/etc/rancher-conf/metricbeat.yml.tmpl"
 dest = "/etc/rancher-conf/metricbeat/metricbeat.yml"
 notify-cmd = "sh /etc/rancher-conf/setup.sh"
 notify-out = true
+
+[[ template ]]
+source = "/etc/rancher-conf/modules.yml.tmpl"
+dest = "/etc/rancher-conf/metricbeat/modules.yml"

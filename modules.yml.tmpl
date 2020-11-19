@@ -1,0 +1,365 @@
+- module: beat
+  metricsets: [ stats, state ]
+  period: 1m
+  hosts: [ localhost:5066 ]
+  xpack.enabled: true
+
+#------------------------------- System Module -------------------------------
+- module: system
+  enabled: true
+  period: 30s
+  metricsets:
+    - cpu             # CPU usage
+    - memory          # Memory usage
+    - process         # Per process metrics
+    - diskio          # Disk IO
+    - socket          # Sockets and connection info (linux only)
+    - socket_summary  # Socket summary
+    - load            # CPU load averages
+    - core            # Per CPU core usage
+
+  processes: [ '.*' ]
+  process.include_cpu_ticks: false
+  process.cgroups.enabled: true
+  process.include_top_n:
+    enabled: true
+    by_cpu: 10
+    by_memory: 10
+
+  cpu.metrics:  [ 'percentages', 'normalized_percentages' ]
+  core.metrics: [ 'percentages' ]
+
+  socket.reverse_lookup.enabled: true
+  # socket.reverse_lookup.success_ttl: 60s
+  # socket.reverse_lookup.failure_ttl: 60s
+
+- module: system
+  enabled: true
+  period: 60s
+  metricsets:
+    - process_summary # Process summary
+    - network         # Network IO
+    - uptime          # System Uptime
+    - filesystem      # File system usage for each mountpoint
+    - fsstat          # File system summary metrics
+
+  # A list of filesystem types to ignore. The filesystem metricset will not
+  # collect data from filesystems matching any of the specified types, and
+  # fsstats will not include data from these filesystems in its summary stats.
+  # If not set, types associated to virtual filesystems are automatically
+  # added when this information is available in the system (e.g. the list of
+  # `nodev` types in `/proc/filesystem`).
+  filesystem.ignore_types:
+    - nsfs
+    - sysfs
+    - rootfs
+    - tmpfs
+    - bdev
+    - proc
+    - cpuset
+    - cgroup
+    - cgroup2
+    - devtmpfs
+    - binfmt_misc
+    - debugfs
+    - tracefs
+    - securityfs
+    - sockfs
+    - dax
+    - bpf
+    - pipefs
+    - ramfs
+    - hugetlbfs
+    - devpts
+    - ecryptfs
+    - fuse
+    - fusectl
+    - overlay
+    - pstore
+    - mqueue
+    - selinuxfs
+
+  # If false, cmdline of a process is not cached.
+  # process.cmdline.cache.enabled: true
+
+  # A list of regular expressions used to whitelist environment variables
+  # reported with the process metricset's events. Defaults to empty.
+  # process.env.whitelist: []
+
+  # Include the cumulative CPU tick values with the process metrics. Defaults
+  # to false.
+
+  # Raid mount point to monitor
+  # raid.mount_point: '/'
+
+  # Diskio configurations
+  # diskio.include_devices: []
+
+#------------------------------- Docker Module -------------------------------
+- module: docker
+  enabled: true
+  period: 30s
+  hosts: [ "unix:///var/run/docker.sock" ]
+  cpu.cores: true
+  labels.dedot: false
+  metricsets:
+    - cpu
+    - diskio
+    - memory
+    - event
+    - healthcheck
+
+- module: docker
+  enabled: true
+  period: 60s
+  hosts: [ "unix:///var/run/docker.sock" ]
+  cpu.cores: true
+  labels.dedot: false
+  metricsets:
+    - network
+    - info
+    - container
+    - image
+
+{{- with host }}
+{{- $host_id := .UUID }}
+{{- with service }}
+{{- with .Parent }}
+{{- $my_stack := .Stack.Name }}
+{{- $my_service := .Name }}
+{{- range $service := services }}
+{{- range $key, $value := .Labels }}
+{{- $list := splitList "." $key }}
+{{- if gt (len $list) 2 }}
+{{- if (and (eq (index $list 0) $my_stack) (eq (index $list 1) $my_service) (eq (index $list 2) "module")) }}
+
+- module: {{ $value }}
+  service.name: {{ $service.Name }}.{{ $service.Stack.Name }}.rancher.internal
+  period: 1m
+  {{- if (lt (len $service.Containers) 1) }}
+  enabled: false
+  {{- else }}
+  {{- $primary := index $service.Containers 0 }}
+  {{- if or (ne $primary.State "running") (ne $primary.Host.UUID $host_id) }}
+  enabled: false
+  {{- else }}
+  enabled: true
+  {{- end }}
+  hosts:
+  {{- $hostLabel := $service.Labels.GetValue (printf "%s.%s.address" $my_stack $my_service) "%{ip}" }}
+  {{- range $service.Containers }}
+    {{- $host := .Host }}
+    - "{{ replace "%{host.ip}" $host.AgentIP (replace "%{ip}" .PrimaryIp $hostLabel) }}"
+  {{- end }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- range $key, $value := .Labels }}
+{{- $list := splitList "." $key }}
+{{- if gt (len $list) 2 }}
+{{- if (and (eq (index $list 0) $my_stack) (eq (index $list 1) $my_service) (ne (index $list 2) "module") (ne (index $list 2) "address")) }}
+  {{ replace (print $my_stack "." $my_service ".") "" $key }}: {{ $value }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+
+# #------------------------------ Graphite Module ------------------------------
+# - module: graphite
+#   metricsets: ["server"]
+#   enabled: true
+
+#   # Host address to listen on. Default localhost.
+#   #host: localhost
+
+#   # Listening port. Default 2003.
+#   #port: 2003
+
+#   # Protocol to listen on. This can be udp or tcp. Default udp.
+#   #protocol: "udp"
+
+#   # Receive buffer size in bytes
+#   #receive_buffer_size: 1024
+
+#   #templates:
+#   #  - filter: "test.*.bash.*" # This would match metrics like test.localhost.bash.stats
+#   #    namespace: "test"
+#   #    template: ".host.shell.metric*" # test.localhost.bash.stats would become metric=stats and tags host=localhost,shell=bash
+#   #    delimiter: "_"
+
+# #------------------------------- HAProxy Module ------------------------------
+# - module: haproxy
+#   metricsets: ["info", "stat"]
+#   period: 10s
+#   hosts: ["tcp://127.0.0.1:14567"]
+#   enabled: true
+
+# #-------------------------------- HTTP Module --------------------------------
+# - module: http
+#   #metricsets:
+#   #  - json
+#   period: 10s
+#   hosts: ["localhost:80"]
+#   namespace: "json_namespace"
+#   path: "/"
+#   #body: ""
+#   #method: "GET"
+#   #username: "user"
+#   #password: "secret"
+#   #request.enabled: false
+#   #response.enabled: false
+#   #json.is_array: false
+#   #dedot.enabled: false
+
+# - module: http
+#   #metricsets:
+#   #  - server
+#   host: "localhost"
+#   port: "8080"
+#   enabled: false
+#   #paths:
+#   #  - path: "/foo"
+#   #    namespace: "foo"
+#   #    fields: # added to the the response in root. overwrites existing fields
+#   #      key: "value"
+
+# #------------------------------- MongoDB Module ------------------------------
+# - module: mongodb
+#   metricsets: ["dbstats", "status", "collstats", "metrics", "replstatus"]
+#   period: 10s
+#   enabled: true
+
+#   # The hosts must be passed as MongoDB URLs in the format:
+#   # [mongodb://][user:pass@]host[:port].
+#   # The username and password can also be set using the respective configuration
+#   # options. The credentials in the URL take precedence over the username and
+#   # password configuration options.
+#   hosts: ["localhost:27017"]
+
+#   # Optional SSL. By default is off.
+#   #ssl.enabled: true
+
+#   # Mode of verification of server certificate ('none' or 'full')
+#   #ssl.verification_mode: 'full'
+
+#   # List of root certificates for TLS server verifications
+#   #ssl.certificate_authorities: ["/etc/pki/root/ca.pem"]
+
+#   # Certificate for SSL client authentication
+#   #ssl.certificate: "/etc/pki/client/cert.pem"
+
+#   # Client Certificate Key
+#   #ssl.key: "/etc/pki/client/cert.key"
+
+#   # Username to use when connecting to MongoDB. Empty by default.
+#   #username: user
+
+#   # Password to use when connecting to MongoDB. Empty by default.
+#   #password: pass
+
+# #-------------------------------- MySQL Module -------------------------------
+# - module: mysql
+#   metricsets:
+#     - "status"
+#   #  - "galera_status"
+#   period: 10s
+
+#   # Host DSN should be defined as "user:pass@tcp(127.0.0.1:3306)/"
+#   # The username and password can either be set in the DSN or using the username
+#   # and password config options. Those specified in the DSN take precedence.
+#   hosts: ["root:secret@tcp(127.0.0.1:3306)/"]
+
+#   # Username of hosts. Empty by default.
+#   #username: root
+
+#   # Password of hosts. Empty by default.
+#   #password: secret
+
+#   # By setting raw to true, all raw fields from the status metricset will be added to the event.
+#   #raw: false
+
+# #----------------------------- PostgreSQL Module -----------------------------
+# - module: postgresql
+#   enabled: true
+#   metricsets:
+#     # Stats about every PostgreSQL database
+#     - database
+
+#     # Stats about the background writer process's activity
+#     - bgwriter
+
+#     # Stats about every PostgreSQL process
+#     - activity
+
+#   period: 10s
+
+#   # The host must be passed as PostgreSQL URL. Example:
+#   # postgres://localhost:5432?sslmode=disable
+#   # The available parameters are documented here:
+#   # https://godoc.org/github.com/lib/pq#hdr-Connection_String_Parameters
+#   hosts: ["postgres://localhost:5432"]
+
+#   # Username to use when connecting to PostgreSQL. Empty by default.
+#   #username: user
+
+#   # Password to use when connecting to PostgreSQL. Empty by default.
+#   #password: pass
+
+# #----------------------------- Prometheus Module -----------------------------
+# - module: prometheus
+#   metricsets: ["stats"]
+#   enabled: true
+#   period: 10s
+#   hosts: ["localhost:9090"]
+#   #metrics_path: /metrics
+#   #namespace: example
+
+# - module: prometheus
+#   metricsets: ["collector"]
+#   enabled: true
+#   period: 10s
+#   hosts: ["localhost:9090"]
+#   #metrics_path: /metrics
+#   #namespace: example
+
+#   # This can be used for service account based authorization:
+#   #  bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+#   #ssl.certificate_authorities:
+#   #  - /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
+
+# #-------------------------------- Redis Module -------------------------------
+# - module: redis
+#   metricsets: ["info", "keyspace"]
+#   enabled: true
+#   period: 10s
+
+#   # Redis hosts
+#   hosts: ["127.0.0.1:6379"]
+
+#   # Timeout after which time a metricset should return an error
+#   # Timeout is by default defined as period, as a fetch of a metricset
+#   # should never take longer then period, as otherwise calls can pile up.
+#   #timeout: 1s
+
+#   # Optional fields to be added to each event
+#   #fields:
+#   #  datacenter: west
+
+#   # Network type to be used for redis connection. Default: tcp
+#   #network: tcp
+
+#   # Max number of concurrent connections. Default: 10
+#   #maxconn: 10
+
+#   # Filters can be used to reduce the number of fields sent.
+#   #processors:
+#   #  - include_fields:
+#   #      fields: ["beat", "metricset", "redis.info.stats"]
+
+#   # Redis AUTH password. Empty by default.
+#   #password: foobared
