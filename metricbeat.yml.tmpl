@@ -233,3 +233,11 @@ processors:
 # The directory from where to read the dashboards. The default is the `kibana`
 # folder in the home path.
 setup.dashboards.directory: /usr/share/metricbeat/kibana
+
+{{ with service.Parent }}
+{{ range $key, $value := .Labels }}
+{{- if eq (index (splitList "." $key) 0) "metricbeat" }}
+{{ substr 11 (len $key) $key }}: {{ $value }}
+{{- end }}
+{{- end }}
+{{- end }}
