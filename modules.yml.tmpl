@@ -127,6 +127,8 @@
 {{- with .Parent }}
 {{- $my_stack := .Stack.Name }}
 {{- $my_service := .Name }}
+{{- $label := printf "%s/%s" $my_stack $my_service }}
+
 {{- range $service := services }}
 {{- range $key, $value := .Labels }}
 {{- $list := splitList "." $key }}
@@ -155,6 +157,7 @@
 {{- end }}
 {{- end }}
 {{- end }}
+
 {{- range $key, $value := .Labels }}
 {{- $list := splitList "." $key }}
 {{- if gt (len $list) 2 }}
@@ -163,7 +166,30 @@
 {{- end }}
 {{- end }}
 {{- end }}
+
+{{- if hasKey .Metadata $label }}
+- service.name: {{ $service.Name }}.{{ $service.Stack.Name }}.rancher.internal
+  period: 1m
+  {{- if (lt (len $service.Containers) 1) }}
+  enabled: false
+  {{- else }}
+  {{- $primary := index $service.Containers 0 }}
+  {{- if or (ne $primary.State "running") (ne $primary.Host.UUID $host_id) }}
+  enabled: false
+  {{- else }}
+  enabled: true
+  {{- end }}
+  hosts:
+  {{- $hostLabel := default "%{ip}" (get (get .Metadata $label) "address") }}
+  {{- range $service.Containers }}
+    {{- $host := .Host }}
+    - "{{ replace "%{host.ip}" $host.AgentIP (replace "%{ip}" .PrimaryIp $hostLabel) }}"
+  {{- end }}
+  {{- end }}
+{{ indent 2 (yaml (omit (get .Metadata $label) "address")) }}
 {{- end }}
+{{- end }}
+
 {{- end }}
 {{- end }}
 {{- end }}
