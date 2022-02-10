@@ -1,4 +1,11 @@
 
+0.0.17 / 2022-02-10
+==================
+
+  * Update rancher-conf-aws
+  * Update build command
+  * Fix nil host error
+
 0.0.16 / 2021-08-04
 ==================
 
