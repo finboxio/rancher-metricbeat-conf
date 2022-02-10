@@ -150,8 +150,12 @@
   hosts:
   {{- $hostLabel := $service.Labels.GetValue (printf "%s.%s.address" $my_stack $my_service) "%{ip}" }}
   {{- range $service.Containers }}
-    {{- $host := .Host }}
-    - "{{ replace "%{host.ip}" $host.AgentIP (replace "%{ip}" .PrimaryIp $hostLabel) }}"
+    {{- $ipReplaced := replace "%{ip}" .PrimaryIp $hostLabel }}
+    {{- if .Host }}
+    - "{{ replace "%{host.ip}" .Host.AgentIP $ipReplaced }}"
+    {{- else }}
+    - "{{ $ipReplaced }}"
+    {{- end }}
   {{- end }}
   {{- end }}
 {{- end }}
@@ -182,8 +186,12 @@
   hosts:
   {{- $hostLabel := default "%{ip}" (get (get .Metadata $label) "address") }}
   {{- range $service.Containers }}
-    {{- $host := .Host }}
-    - "{{ replace "%{host.ip}" $host.AgentIP (replace "%{ip}" .PrimaryIp $hostLabel) }}"
+    {{- $ipReplaced := replace "%{ip}" .PrimaryIp $hostLabel }}
+    {{- if .Host }}
+    - "{{ replace "%{host.ip}" .Host.AgentIP $ipReplaced }}"
+    {{- else }}
+    - "{{ $ipReplaced }}"
+    {{- end }}
   {{- end }}
   {{- end }}
 {{ indent 2 (yaml (omit (get .Metadata $label) "address")) }}
