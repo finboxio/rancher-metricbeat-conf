@@ -142,10 +142,15 @@
   enabled: false
   {{- else }}
   {{- $primary := index $service.Containers 0 }}
-  {{- if or (ne $primary.State "running") (ne $primary.Host.UUID $host_id) }}
+  {{- $phost := $primary.Host }}
+  {{- if $phost }}
+  {{- if or (ne $primary.State "running") (ne $phost.UUID $host_id) }}
   enabled: false
   {{- else }}
   enabled: true
+  {{- end }}
+  {{- else }}
+  enabled: false
   {{- end }}
   hosts:
   {{- $hostLabel := $service.Labels.GetValue (printf "%s.%s.address" $my_stack $my_service) "%{ip}" }}
@@ -178,10 +183,15 @@
   enabled: false
   {{- else }}
   {{- $primary := index $service.Containers 0 }}
-  {{- if or (ne $primary.State "running") (ne $primary.Host.UUID $host_id) }}
+  {{- $phost := $primary.Host }}
+  {{- if $phost }}
+  {{- if or (ne $primary.State "running") (ne $phost.UUID $host_id) }}
   enabled: false
   {{- else }}
   enabled: true
+  {{- end }}
+  {{- else }}
+  enabled: false
   {{- end }}
   hosts:
   {{- $hostLabel := default "%{ip}" (get (get .Metadata $label) "address") }}
